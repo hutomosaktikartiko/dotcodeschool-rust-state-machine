@@ -39,16 +39,43 @@ impl<T: Config> Pallet<T> {
 		caller: T::AccountId,
 		to: T::AccountId,
 		amount: T::Balance,
-	) -> Result<(), &'static str> {
+	) -> crate::support::DispatchResult {
 		let caller_balance = self.balance(&caller);
 		let to_balance = self.balance(&to);
 
-		let new_caller_balance = caller_balance.checked_sub(&amount).ok_or("Not enough funds")?;
-		let new_to_balance = to_balance.checked_add(&amount).ok_or("Overflow occured")?;
+		let new_caller_balance = caller_balance.checked_sub(&amount).ok_or("Not enough funds.")?;
+		let new_to_balance = to_balance.checked_add(&amount).ok_or("Overflow")?;
 
-		self.set_balance(&caller, new_caller_balance);
-		self.set_balance(&to, new_to_balance);
+		self.balances.insert(caller, new_caller_balance);
+		self.balances.insert(to, new_to_balance);
 
+		Ok(())
+	}
+}
+
+/// A public enum which describes the calls we want to expose to the dispatcher.
+/// We should expect that the caller of each call will be provided by the dispatcher,
+/// and not included as a parameter of the call.
+pub enum Call<T: Config> {
+	Transfer { to: T::AccountId, amount: T::Balance },
+}
+
+/// Implementation of the dispatch logic, mapping from `BalancesCall` to the appropriate underlying
+/// function we want to execute.
+impl<T: Config> crate::support::Dispatch for Pallet<T> {
+	type Caller = T::AccountId;
+	type Call = Call<T>;
+
+	fn dispatch(
+		&mut self,
+		caller: Self::Caller,
+		call: Self::Call,
+	) -> crate::support::DispatchResult {
+		match call {
+			Call::Transfer { to, amount } => {
+				self.transfer(caller, to, amount)?;
+			},
+		}
 		Ok(())
 	}
 }
@@ -68,7 +95,7 @@ mod tests {
 	}
 
 	#[test]
-	fn init_balance() {
+	fn init_balances() {
 		let mut balances = super::Pallet::<TestConfig>::new();
 
 		assert_eq!(balances.balance(&"alice".to_string()), 0);
@@ -82,12 +109,17 @@ mod tests {
 		let mut balances = super::Pallet::<TestConfig>::new();
 
 		assert_eq!(
-			balances.transfer("alice".to_string(), "bob".to_string(), 10),
-			Err("Not enough funds")
+			balances.transfer("alice".to_string(), "bob".to_string(), 51),
+			Err("Not enough funds.")
 		);
 		balances.set_balance(&"alice".to_string(), 100);
-		assert_eq!(balances.transfer("alice".to_string(), "bob".to_string(), 10), Ok(()));
-		assert_eq!(balances.balance(&"alice".to_string()), 90);
-		assert_eq!(balances.balance(&"bob".to_string()), 10);
+		assert_eq!(balances.transfer("alice".to_string(), "bob".to_string(), 51), Ok(()));
+		assert_eq!(balances.balance(&"alice".to_string()), 49);
+		assert_eq!(balances.balance(&"bob".to_string()), 51);
+
+		assert_eq!(
+			balances.transfer("alice".to_string(), "bob".to_string(), 51),
+			Err("Not enough funds.")
+		);
 	}
 }
