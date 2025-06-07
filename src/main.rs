@@ -5,8 +5,8 @@ mod system;
 /// It accumulates all of the different pallets we want to use.
 #[derive(Debug)]
 pub struct Runtime {
-	system: system::Pallet,
-	balances: balances::Pallet,
+	system: system::Pallet<&'static str, u32, u32>,
+	balances: balances::Pallet<&'static str, u128>,
 }
 
 impl Runtime {
@@ -21,25 +21,19 @@ fn main() {
 	let mut runtime = Runtime::new();
 
 	// set the balance of `alice` to 100
-	runtime.balances.set_balance(&"alice".to_string(), 100);
+	runtime.balances.set_balance(&"alice", 100);
 
 	// start emulating a block
 	runtime.system.inc_block_number();
 	assert_eq!(runtime.system.block_number(), 1);
 
 	// first transaction
-	runtime.system.inc_nonce(&"alice".to_string());
-	let _res = runtime
-		.balances
-		.transfer("alice".to_string(), "bob".to_string(), 30)
-		.map_err(|e| eprintln!("{}", e));
+	runtime.system.inc_nonce(&"alice");
+	let _res = runtime.balances.transfer("alice", "bob", 30).map_err(|e| eprintln!("{}", e));
 
 	// second transaction
-	runtime.system.inc_nonce(&"alice".to_string());
-	let _res = runtime
-		.balances
-		.transfer("alice".to_string(), "charlie".to_string(), 30)
-		.map_err(|e| eprint!("{}", e));
+	runtime.system.inc_nonce(&"alice");
+	let _res = runtime.balances.transfer("alice", "charlie", 30).map_err(|e| eprint!("{}", e));
 
 	println!("{:#?}", runtime);
 }
